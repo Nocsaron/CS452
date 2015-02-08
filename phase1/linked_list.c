@@ -41,7 +41,21 @@ void append_list(List *list, unsigned int pid,unsigned int status) {
     node->next=create_node();
 }
 
-Node *find_status(List *list, int status) {
+Node *pop(List *list) {
+    Node *temp = list->first;
+    Node *new_first=temp->next;
+    list->first=new_first;
+    return temp;
+}
+
+Node *get_element(List *list, int element) {
+    Node *node = list->first;
+    int i = 0;
+    while(i < element && node != NULL) { node=node->next; i++; }
+    return node;
+}
+
+Node *find_status(List *list, unsigned int status) {
     Node *node = list->first;
     while(node->next != NULL) {
         if(node->status == status) { return node; }
@@ -50,7 +64,7 @@ Node *find_status(List *list, int status) {
     return NULL;
 }
 
-Node *find_pid(List *list, int pid) {
+Node *find_pid(List *list, unsigned int pid) {
     Node *node = list->first;
     while(node->next != NULL) {
         if(node->pid == pid) { return node; }
@@ -70,6 +84,7 @@ int print_list(List *list) {
     printf("\n");
     return i-1;
 }
+void print_node(Node *node) { printf("Pid: %d\tStatus: %d\n",node->pid,node->status); }
 int main(int argc, char *argv[]) {
     List *list = create_list();
     int i;
@@ -77,9 +92,13 @@ int main(int argc, char *argv[]) {
         append_list(list,i,i*2);
     }
     int num = print_list(list);
-    printf("%i arguments printed\n",num);
-    Node *node=find_pid(list,15);
-    if(node == NULL)  printf("No such status found\n"); 
-    else printf("Node Found! Pid: %d Status: %d\n",node->pid,node->status);
+    printf("%i arguments printed\n\n\n",num);
+
+    Node *node=get_element(list, 4);
+    if(node == NULL) { printf("No such element\n"); }
+    else  print_node(node);
+
+
+
     delete_list(list);
 }

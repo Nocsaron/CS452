@@ -12,8 +12,12 @@ typedef struct list {
     Node *first;
 } List;
 
-List *create_list();
-void append_list(List *list, unsigned int pid, unsigned int status);
-Node get_element(List *list, int element);
-int print_list(List *list);
-void delete_list(List *list);
+extern List *create_list();
+extern void append_list(List *list, unsigned int pid, unsigned int status);
+extern Node *get_element(List *list, int element);
+extern Node *pop(List* list);
+extern Node *find_status(List *list, unsigned int status);
+extern Node *find_pid(List *list, unsigned int pid);
+extern int print_list(List *list);
+extern void delete_list(List *list);
+
