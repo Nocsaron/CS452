@@ -41,6 +41,24 @@ void append_list(List *list, unsigned int pid,unsigned int status) {
     node->next=create_node();
 }
 
+Node *find_status(List *list, int status) {
+    Node *node = list->first;
+    while(node->next != NULL) {
+        if(node->status == status) { return node; }
+        node=node->next;
+    }
+    return NULL;
+}
+
+Node *find_pid(List *list, int pid) {
+    Node *node = list->first;
+    while(node->next != NULL) {
+        if(node->pid == pid) { return node; }
+        node=node->next;
+    }
+    return NULL;
+}
+
 int print_list(List *list) {
     Node *node = list->first;
     int i=0;
@@ -50,16 +68,18 @@ int print_list(List *list) {
         i++;
     }
     printf("\n");
-    delete_list(list);
     return i-1;
 }
 int main(int argc, char *argv[]) {
     List *list = create_list();
     int i;
     for(i = 0; i < argc; i++) {
-        append_list(list,i,i);
+        append_list(list,i,i*2);
     }
     int num = print_list(list);
     printf("%i arguments printed\n",num);
-
+    Node *node=find_pid(list,15);
+    if(node == NULL)  printf("No such status found\n"); 
+    else printf("Node Found! Pid: %d Status: %d\n",node->pid,node->status);
+    delete_list(list);
 }
