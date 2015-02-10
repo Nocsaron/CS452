@@ -46,15 +46,31 @@ int pid = -1;
  
 int numProcs = 0;
 
-char **STATUS=(char *[]){"Ready","Finished","Running"};
+char **STATUS=(char *[]){"Ready","Finished","Running","Blocked"};
 
 static int sentinel(void *arg);
 static void launch(void);
+
+int brother_pid;
+int brother(void *arg) {
+    USLOSS_Console("brother starts\n");
+    return 555;
+}
+
 /* -------------------------- Functions ----------------------------------- */
 int P2_Startup(void *arg) {
     USLOSS_Console("P2_Startup()\n");
     P1_DumpProcesses();
+    USLOSS_Console("P2_Startup(): Forking brother\n");
+    int exit_status_1;
+    brother_pid = P1_Fork("brother", brother, NULL, USLOSS_MIN_STACK*2, 1);
+    USLOSS_Console("P2_Startup(): brother pid: %d \n", brother_pid);
+    int exit_pid_1 = P1_Join(&exit_status_1);
     USLOSS_Halt(0);
+}
+
+void P1_Join(int *status) {
+//-- 
 }
 
 void P1_Quit(int status){
@@ -139,7 +155,7 @@ void startup()
         USLOSS_Halt(1);
     }
   /* start the P2_Startup process */
-  P1_Fork("P2_Startup", P2_Startup, NULL, 4 * USLOSS_MIN_STACK, 1);
+  P1_Fork("P2_Startup", P2_Startup, NULL, 4 * USLOSS_MIN_STACK, 3);
  
     dispatcher(); 
   /* Should never get here (sentinel will call USLOSS_Halt) */
@@ -338,6 +354,8 @@ void dispatcher() {
     }
     else {
         if(DEBUG) USLOSS_Console("dispatcher(): Not 1st/2nd run, switching contexts\n");
+        pid = next->pid;
+        USLOSS_Console("dispatcher(): Contexted Switched!\n");
         USLOSS_ContextSwitch(&procTable[pid].context,&procTable[next->pid].context);
     }
     if(DEBUG) USLOSS_Console("dispatcher(): exiting\n");

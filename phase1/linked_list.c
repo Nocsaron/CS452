@@ -29,6 +29,19 @@ void delete_list(List *list) {
     free(list);
 }
 
+void remove_node(List *list, unsigned int pid) {
+    Node *node = list->first;
+    Node *temp;
+    while(node->next != NULL) {
+        if(node->pid == pid) {
+            temp = node->next;
+            node->next=node->next->next;
+        }
+        node=node->next;
+    }
+    free(temp);
+}
+
 void delete_node(Node *node) {
     free(node);
 }
@@ -38,6 +51,7 @@ void append_list(List *list, unsigned int pid,unsigned int status) {
     while(node->next != NULL) { node=node->next; }
     node->pid=pid;
     node->status=status;
+    node->returncode=(int)NULL;
     node->next=create_node();
 }
 
@@ -47,6 +61,8 @@ Node *pop(List *list) {
     list->first=new_first;
     return temp;
 }
+
+Node *peek(List *list) { return list->first; }
 
 Node *get_element(List *list, int element) {
     Node *node = list->first;
@@ -84,7 +100,14 @@ int print_list(List *list) {
     printf("\n");
     return i-1;
 }
-void print_node(Node *node) { printf("Pid: %d\tStatus: %d\n",node->pid,node->status); }
+void print_node(Node *node) { 
+    if(node->returncode=(int)NULL)
+        printf("Pid: %d\tStatus: %d\tReturn Code: NULL\n",node->pid,node->status); 
+    else
+        printf("Pid: %d\tStatus: %d\tReturn Code: %d\n",node->pid,node->status,node->returncode); 
+
+}
+/*
 int main(int argc, char *argv[]) {
     List *list = create_list();
     int i;
@@ -94,11 +117,12 @@ int main(int argc, char *argv[]) {
     int num = print_list(list);
     printf("%i arguments printed\n\n\n",num);
 
-    Node *node=get_element(list, 4);
-    if(node == NULL) { printf("No such element\n"); }
-    else  print_node(node);
+    remove_node(list,4);
+
+    print_list(list);
 
 
 
     delete_list(list);
 }
+*/
