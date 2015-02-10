@@ -6,6 +6,7 @@
 
 
 #include <stddef.h>
+#include <stdlib.h>
 #include "usloss.h"
 #include "phase1.h"
 #include "linked_list.h"
@@ -26,13 +27,15 @@
 
 /* ----------------------Function Defnitions------------------------------- */
 int sentinel(void * notused);
-
+int isKernel();
+void dispatcher();
 /* -------------------------- Globals ------------------------------------- */
 
 typedef struct {
     USLOSS_Context      context;                /* State of process */
     int                 (*startFunc)(void *);   /* Starting Function */
     void                *startArg;              /* Argument to starting function */
+    char                *name;                  /* Process Name */
     int                 PID;                    /* Process Identifier */
     int                 priority;               /* Process Priority */
     char                *stack;                 /* Process Stack */
@@ -74,6 +77,7 @@ void startup() {
     for(i = 0; i < P1_MAXPROC; i++) {
         procTable[i].status=NO_PROCESS;
     }
+    USLOSS_Console("procTable[0].status = %d\n",procTable[i].status);
 //--Initialize Ready and Blocked lists
     if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
     readyList   = create_list();
@@ -84,7 +88,7 @@ void startup() {
 //--Setup start process
     //if(DEBUG >= 2) USLOSS_Console("startup(): Forking P2_Startup\n");
     //P1_Fork("P2_Startup",P2_Startup,NULL,4*USLOSS_MIN_STACK,1);
-
+    P1_DumpProcesses();
     if(DEBUG == 3) USLOSS_Console("startup(): End of startup\n");
     return;
 }
@@ -107,6 +111,12 @@ void finish() {
  * ----------------------------------------------------------------------- */
 void launch(void) {
     //--I have no idea whats going on here. Copy from skeleton file
+    int pid = P1_GetPID();
+    if(DEBUG == 3) USLOSS_Console("launch(): Entered launch()\n");
+    int rc;
+    USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
+    rc = procTable[pid].startFunc(procTable[pid].startArg);
+    P1_Quit(rc);
 }
 
 
@@ -128,24 +138,71 @@ void launch(void) {
  *              Current Process (may) change
  * ----------------------------------------------------------------------- */
 int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority) {
-    int newPid;
+    if(DEBUG ==3) USLOSS_Console("P1_Fork(): Entered P1_Fork\n");
+    int newPID = -1;
  //--Check if in Kernel Mode
+    if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Check for kernel mode\n");
+    if(!isKernel()) {
+        USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
+        USLOSS_Halt(1);
+    }
  //--Disable interrupts
  //--Validate input
  //----Valid Priority
+    if(DEBUG == 3) USLOSS_Console("P1_Fork(): Checking priority\n");
+    if(priority < MAXPRIORITY || priority > MINPRIORITY)
+        return -3;
  //----Valid Stack Size
+    if(DEBUG == 3) USLOSS_Console("P1_Fork(): Checking Stack Size\n");
+    if(stacksize < USLOSS_MIN_STACK) 
+        return -2;
  //----Enough space for new process
+ //----Iterate through process table looking for empty spot
+    int i;
+    for(i = 0; i < P1_MAXPROC; i++) {
+     //--If a spot is empty, set that spot to new PID and exit loop
+        if(procTable[i].status == NO_PROCESS) {
+            newPID = i;
+            break;
+        }
+    }
+    if(newPID == -1) 
+        return -1;
+    if(DEBUG == 3) USLOSS_Console("P1_Fork(): New pid is: %d\n",newPID);
  //----(name/func cant be null??)
- 
- //--Find empty space in process table
+    
  //--Initialize PCB
+    if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Intializing new PCB\n");
  //--Update Parent PCB to reflect new child
+    procTable[newPID].startFunc     = f;
+    procTable[newPID].startArg      = arg;
+    procTable[newPID].name          = name;
+    procTable[newPID].PID           = newPID;
+    procTable[newPID].status        = READY;
+    procTable[newPID].priority      = priority;
+    procTable[newPID].time_start    = 0;
+    procTable[newPID].cyclesUsed    = 0;
+    procTable[newPID].parentPID     = P1_GetPID();
+    procTable[newPID].children      = create_list();
+ //--Allocate Stack
+    if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Allocating space for stack\n");
+    procTable[newPID].stack = malloc(stacksize);
  //--Initialize context
+    if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Calling USLOSS_ContextInit()\n");
+    USLOSS_ContextInit(&(procTable[newPID].context), USLOSS_PsrGet(), procTable[newPID].stack, stacksize, launch);
+ //--Add to parents child list
+    if(DEBUG == 3) USLOSS_Console("P1_Fork(): Adding new process to parent's child list\n");
+    if(P1_GetPID() > -1)
+        append_list(procTable[P1_GetPID()].children, newPID);
  //--Add to readylist
+    if(DEBUG == 3) USLOSS_Console("P1_Fork(): Adding new process to ready list\n");
+    insert(readyList,newPID, priority);
  //--call dispatcher
+    if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Calling dispatcher()\n");
+    dispatcher();
  //--Enable interrupts
  //--Return PID
-    return newPid;
+    return newPID;
 }
 /* ------------------------------------------------------------------------
  * Name:        P1_Quit 
@@ -157,14 +214,28 @@ int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority)
  *              Current Process changes
  * ----------------------------------------------------------------------- */
 void P1_Quit(int status) {
+    if(DEBUG == 3) USLOSS_Console("P1_Quit(): Entered P1_Quit\n");
 //--Check in kernel mode
+    if(!isKernel()) {
+        USLOSS_Console("ERROR: Not in kernel mode!\n");
+        USLOSS_Halt(1);
+    }
 //--Disable interrupts
 //--Iterate through children
-//----Set parent PID to empty if running
-//----Delete child if quit
+    if(DEBUG == 3) USLOSS_Console("P1_Quit(): Setting all children's parent pid to -1\n");
+    Node *node = procTable[P1_GetPID()].children->first;
+    while(node->next != NULL) {
+//----Set parent PID to empty
+        procTable[node->pid].parentPID = -1;
+    }
 //--Clean up proc table entry
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Process finished withs status: %d\n",status);
+    procTable[P1_GetPID()].return_status = status;
+    procTable[P1_GetPID()].status = FINISHED;
 //--Unblock parent (if blocked)
 //--Call dispatcher
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Calling dispatcher()\n");
+    dispatcher();
 //--Enable interrupts
 }
 /* ------------------------------------------------------------------------
@@ -214,11 +285,7 @@ int P1_Join(int *status) {
  * Returns:     int pid - PID of current process
  * Side Effects:none
  * ----------------------------------------------------------------------- */
-int P1_GetPID() {
-    int PID;
-
-    return PID;
-}
+int P1_GetPID() { return currentPID; }
 /* ------------------------------------------------------------------------
  * Name:        P1_DumpProcesses 
  * Purpose:     Prints all processes' PCB in a readable format
@@ -227,7 +294,23 @@ int P1_GetPID() {
  * Side Effects:none
  * ----------------------------------------------------------------------- */
 void P1_DumpProcesses() {
+    if(DEBUG == 3) USLOSS_Console("P1_DumpProcesses(): Entering DumpProcesses\n");
+    int i;
+    int runningProcesses = 0;
 
+    USLOSS_Console("------------------------------Process Dump---------------------------------\n");
+    USLOSS_Console("%10s%10s%10s%10s%10s%10s%15s\n","Name","PID","PPID","Priority","Status","Children","Clock Cycles");
+    for(i = 0; i < P1_MAXPROC; i++) {
+        if(procTable[i].status != NO_PROCESS) {
+            runningProcesses++;
+            PCB proc = procTable[i];
+            USLOSS_Console("%10s%10d%10d%10d%10d%10d%15d\n",proc.name,proc.PID,proc.parentPID,proc.priority,proc.status,-1,proc.cyclesUsed);
+        }
+    }
+     USLOSS_Console("---------------------------------------------------------------------------\n");   
+     USLOSS_Console("There are %d running processes.\n",runningProcesses);
+
+     if(DEBUG == 3) USLOSS_Console("P1_DumpProcesses(): Leaving DumpProcessesi\n");
 }
 /* ------------------------------------------------------------------------
  * Name:        sentinel
@@ -247,6 +330,20 @@ int sentinel(void *notused) {
     return(0);
 }
 
+/* ------------------------------------------------------------------------
+ * Name:        isKernel 
+ * Purpose:     Detects if the OS is in Kernel Mode or User Mode
+ * Parameter:   None
+ * Returns:     0: OS is in kernel mode
+ *             !0: OS is in user mode
+ * Side Effects:None
+ * ----------------------------------------------------------------------- */
+int isKernel() {
+    return (USLOSS_PSR_CURRENT_MODE & USLOSS_PsrGet());
+}
+
+
+
 
 /* ------------------------------------------------------------------------
  * Name: 
@@ -257,4 +354,4 @@ int sentinel(void *notused) {
  * ----------------------------------------------------------------------- */
 
 
-
+void dispatcher() { }
