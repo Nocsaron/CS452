@@ -22,18 +22,12 @@
 
 typedef void *P1_Semaphore;
 
-#define READY 0
-#define FINISHED 1
-#define RUNNING 2
-#define NO_PROCESS 3
-
-
 /* 
  * Function prototypes for this phase.
  */
 
 extern  int             P1_Fork(char *name, int(*func)(void *), void *arg, 
-        int stackSize, int priority);
+			    int stackSize, int priority);
 extern	int		P1_Join(int *status);
 extern	void		P1_Quit(int status);
 extern  int		P1_Kill(int pid, int status);
@@ -50,9 +44,6 @@ extern	int		P1_GetPID(void);
 extern  void		P1_DumpProcesses(void);
 
 extern	int		P2_Startup(void *arg);
-
-void dispatcher();
-void disableInterrupts();
 
 extern void (*syscalls_vec[USLOSS_MAX_SYSCALLS])(USLOSS_Sysargs *);
 
