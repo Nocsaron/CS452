@@ -11,7 +11,10 @@
 #include "linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
-#define DEBUG_ALL   1
+#define DEBUG       3   /* 0: No debug statements
+                           1: Some debug statements
+                           2: Most debug statements
+                           3: All debug statements */
 
 #define MINPRIORITY 6
 #define MAXPRIORITY 1
@@ -20,6 +23,9 @@
 #define READY       1
 #define RUNNING     2
 #define FINISHED    3
+
+/* ----------------------Function Defnitions------------------------------- */
+int sentinel(void * notused);
 
 /* -------------------------- Globals ------------------------------------- */
 
@@ -61,10 +67,26 @@ typedef struct {
  * Side Effects:Starts System
  * ----------------------------------------------------------------------- */
 void startup() {
+    if(DEBUG == 3) USLOSS_Console("startup(): Entered startup\n");
 //--Initialize Process Table
+    if(DEBUG == 3) USLOSS_Console("startup(): Initializing Process Table\n");
+    int i = 0;
+    for(i = 0; i < P1_MAXPROC; i++) {
+        procTable[i].status=NO_PROCESS;
+    }
 //--Initialize Ready and Blocked lists
+    if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
+    readyList   = create_list();
+    blockedList = create_list();
 //--Setup sentinel process
+    if(DEBUG >= 2) USLOSS_Console("startup(): Forking Sentinel\n");
+    P1_Fork("sentinel",sentinel,NULL,USLOSS_MIN_STACK, MINPRIORITY);
 //--Setup start process
+    //if(DEBUG >= 2) USLOSS_Console("startup(): Forking P2_Startup\n");
+    //P1_Fork("P2_Startup",P2_Startup,NULL,4*USLOSS_MIN_STACK,1);
+
+    if(DEBUG == 3) USLOSS_Console("startup(): End of startup\n");
+    return;
 }
 /* ------------------------------------------------------------------------
  * Name:        finish 
@@ -208,10 +230,31 @@ void P1_DumpProcesses() {
 
 }
 /* ------------------------------------------------------------------------
+ * Name:        sentinel
+ * Purpose:     Serves as holding pattern for OS when no other processes to run
+ *              Also detects and report simple deadlock states
+ * Parameter:   None
+ * Returns:     Nothing
+ * Side Effects:If in deadlock, halt
+ * ----------------------------------------------------------------------- */
+int sentinel(void *notused) {
+    while(numberProcs > 1) {
+    //--Check for deadlock (NOT IMPLEMENTED)
+    //--Commented out since interrupts are not implemented
+        //USLOSS_WaitInt();
+    }
+    USLOSS_Halt(0);
+    return(0);
+}
+
+
+/* ------------------------------------------------------------------------
  * Name: 
  * Purpose:
  * Parameter:
  * Returns:
  * Side Effects:
  * ----------------------------------------------------------------------- */
+
+
 
