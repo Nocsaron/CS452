@@ -1,7 +1,6 @@
 typedef struct node {
     unsigned int pid;
-    unsigned int status;
-    int returncode;
+    int priority;
     struct node *next;
 } Node;
 
@@ -14,7 +13,8 @@ typedef struct list {
 } List;
 
 extern List *create_list();
-extern void append_list(List *list, unsigned int pid, unsigned int status);
+extern void append_list(List *list, unsigned int pid);
+extern void inster(List *list, unsigned int pid, int priority);
 extern Node *get_element(List *list, int element);
 extern Node *peek(List *list);
 extern Node *pop(List* list);

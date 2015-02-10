@@ -46,13 +46,15 @@ void delete_node(Node *node) {
     free(node);
 }
 
-void append_list(List *list, unsigned int pid,unsigned int status) {
+void append_list(List *list, unsigned int pid) {
     Node *node = list->first;
     while(node->next != NULL) { node=node->next; }
     node->pid=pid;
-    node->status=status;
-    node->returncode=(int)NULL;
     node->next=create_node();
+}
+
+void insert(List *list, int priority) {
+
 }
 
 Node *pop(List *list) {
@@ -71,15 +73,6 @@ Node *get_element(List *list, int element) {
     return node;
 }
 
-Node *find_status(List *list, unsigned int status) {
-    Node *node = list->first;
-    while(node->next != NULL) {
-        if(node->status == status) { return node; }
-        node=node->next;
-    }
-    return NULL;
-}
-
 Node *find_pid(List *list, unsigned int pid) {
     Node *node = list->first;
     while(node->next != NULL) {
@@ -93,19 +86,12 @@ int print_list(List *list) {
     Node *node = list->first;
     int i=0;
     while(node->next != NULL) {
-        printf("Pid: %d\tStatus: %d\n",node->pid, node->status);
+        printf("Pid: %d\n",node->pid);
         node = node->next;
         i++;
     }
     printf("\n");
     return i-1;
-}
-void print_node(Node *node) { 
-    if(node->returncode=(int)NULL)
-        printf("Pid: %d\tStatus: %d\tReturn Code: NULL\n",node->pid,node->status); 
-    else
-        printf("Pid: %d\tStatus: %d\tReturn Code: %d\n",node->pid,node->status,node->returncode); 
-
 }
 /*
 int main(int argc, char *argv[]) {
