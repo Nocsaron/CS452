@@ -232,7 +232,18 @@ void P1_Quit(int status) {
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Process finished withs status: %d\n",status);
     procTable[P1_GetPID()].return_status = status;
     procTable[P1_GetPID()].status = FINISHED;
+
+    int currentProcParentPID = procTable[P1_GetPID()].parentPID;
+//--Remove then append process to parent's child block, making it so that the first process to 
+//--quit will be the first process with a status of quit it finds. 
+
+    remove_node(procTable[currentProcParentPID].children, P1_GetPID());
+    append_list(procTable[currentProcParentPID].children, P1_GetPID());
+
 //--Unblock parent (if blocked)
+    if(procTable[currentProcParentPID].status == BLOCKED){
+        procTable[currentProcParentPID].status = READY;
+        insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
 //--Call dispatcher
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Calling dispatcher()\n");
     dispatcher();
@@ -250,9 +261,57 @@ void P1_Quit(int status) {
  * Side Effects:ReadyList, Process Table modified
  * ----------------------------------------------------------------------- */
 int P1_Kill(int PID, int status) {
-    int returnCode;
 
-    return returnCode;
+    if(DEBUG == 3) USLOSS_Console("P1_Kill(): Entered P1_Kill\n");
+//--Check in kernel mode
+    if(!isKernel()) {
+        USLOSS_Console("ERROR: Not in kernel mode!\n");
+        USLOSS_Halt(1);
+    }
+
+//--Check if PID is Current Process
+    if(PID == P1_GetPID()){
+        return -2;
+    }
+
+//--Check if PID is valid
+    if(procTable[PID].status == INVALID){
+        return -1;
+    }
+
+//--Disable interrupts
+//--Iterate through children
+    if(DEBUG == 3) USLOSS_Console("P1_Kill(): Setting all children's parent pid to -1\n");
+
+    Node *node = procTable[PID].children->first;
+
+    while(node->next != NULL) {
+//----Set parent PID to empty
+        procTable[node->pid].parentPID = -1;
+    }
+//--Clean up proc table entry
+    if(DEBUG >= 2) USLOSS_Console("P1_Kill(): Process finished withs status: %d\n",status);
+    procTable[PID].return_status = status;
+    procTable[PID].status = FINISHED;
+
+    int currentProcParentPID = procTable[P1_GetPID()].parentPID;
+//--Remove then append process to parent's child block, making it so that the first process to 
+//--quit will be the first process with a status of quit it finds. 
+
+    remove_node(procTable[currentProcParentPID].children, P1_GetPID());
+    append_list(procTable[currentProcParentPID].children, P1_GetPID());
+
+//--Unblock parent (if blocked)
+    if(currentProcParentPID >= 0){
+        if(procTable[currentProcParentPID].status == BLOCKED){
+            procTable[currentProcParentPID].status = READY;
+            insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
+    }
+//--Call dispatcher
+    if(DEBUG >= 2) USLOSS_Console("P1_Kill(): Calling dispatcher()\n");
+    dispatcher();
+
+    return 0;
 }
 /* ------------------------------------------------------------------------
  * Name:        P1_Join
@@ -266,17 +325,42 @@ int P1_Kill(int PID, int status) {
  *              parent process is blocked
  * ----------------------------------------------------------------------- */
 int P1_Join(int *status) {
-    int PID;
+ 
+    if(DEBUG == 3) USLOSS_Console("P1_Join(): Entered P1_Join\n");
 //--Check in kernel mode
+    if(!isKernel()) {
+        USLOSS_Console("ERROR: Not in kernel mode!\n");
+        USLOSS_Halt(1);
+    }
 //--Disable interrupts
 //--Validate input
 //----Make sure process has kids
-//--Get !first! quit child
-//----If no quit child, block until child returns
+    Node *node = procTable[P1_GetPID()].children->first;
+
+    if(node->next == NULL){
+        procTable[P1_GetPID()].status = BLOCKED;
+        return -1;
+    }
+    else{
+        //--Get !first! quit child
+        while(node->next != NULL){
+            if(procTable[node->pid].status == FINISHED){
+                //Not sure what to do, but this is when it finds its first quit child
+                //Something about quitting the child or parent or both, I'm not sure.
+                status = procTable[node->pid].return_status;
+                return node->pid;
+            }
+            node = node->next;
+        }
+        //----If no quit child, block until child returns
+        procTable[P1_GetPID()].status = BLOCKED;
+
+    }
+
 //--Clean up child process
 //--Enable interrupts
 //--Return child PID
-    return PID;
+    return -1;
 }
 /* ------------------------------------------------------------------------
  * Name:        P1_getPID 
@@ -354,4 +438,44 @@ int isKernel() {
  * ----------------------------------------------------------------------- */
 
 
-void dispatcher() { }
+void dispatcher() {
+
+    if(DEBUG == 3) USLOSS_Console("dispatcher(): Entered Dispatcher\n");
+
+    if(!isKernel()) {
+      USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
+      USLOSS_Halt(1);
+    }
+
+    node *next = pop(readyList);
+
+    /* First process */
+    if(currentPID < 0){
+      currentPID = next->pid;
+      USLOSS_ContextSwitch(NULL, &procTable[currentPID].context);
+    }
+    /* Sentinel process */
+    else if(procTable[next->pid].priority == 6){
+        insert(readyList,next->pid, 6);
+    }
+    /*Current process is not yet finished, but dispatcher wants to run new process*/
+    else if(procTable[currentPID].status == READY){
+
+        /*Current process is lower priority than next process*/
+        if(procTable[currentPID].priority > next->priority){
+            insert(readyList,currentPID, procTable[currentPID].priority);//Add current process back to readyList
+            USLOSS_ContextSwitch(&procTable[currentPID].context, &procTable[next->pid].context); //switch context
+            currentPID = next->pid; //set pid to new running pid
+        }
+        /*Current process is higher priority than next process*/
+        else{
+            insert(readyList, next->pid, next->priority);
+        }
+    }
+    /*Current process is no longer READY*/
+    else{
+      USLOSS_ContextSwitch(&procTable[currentPID].context, &procTable[next->pid].context); //switch context
+      currentPID = next->pid; //set pid to new running pid
+    }
+
+}
