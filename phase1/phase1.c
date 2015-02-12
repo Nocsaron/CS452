@@ -24,6 +24,7 @@
 #define READY       1
 #define RUNNING     2
 #define FINISHED    3
+#define BLOCKED     4
 
 /* ----------------------Function Defnitions------------------------------- */
 int sentinel(void * notused);
@@ -86,8 +87,8 @@ void startup() {
     if(DEBUG >= 2) USLOSS_Console("startup(): Forking Sentinel\n");
     P1_Fork("sentinel",sentinel,NULL,USLOSS_MIN_STACK, MINPRIORITY);
 //--Setup start process
-    //if(DEBUG >= 2) USLOSS_Console("startup(): Forking P2_Startup\n");
-    //P1_Fork("P2_Startup",P2_Startup,NULL,4*USLOSS_MIN_STACK,1);
+    if(DEBUG >= 2) USLOSS_Console("startup(): Forking P2_Startup\n");
+    P1_Fork("P2_Startup",P2_Startup,NULL,4*USLOSS_MIN_STACK,4);
     P1_DumpProcesses();
     if(DEBUG == 3) USLOSS_Console("startup(): End of startup\n");
     return;
@@ -193,12 +194,13 @@ int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority)
  //--Add to parents child list
     if(DEBUG == 3) USLOSS_Console("P1_Fork(): Adding new process to parent's child list\n");
     if(P1_GetPID() > -1)
-        append_list(procTable[P1_GetPID()].children, newPID);
+        append_list(procTable[P1_GetPID()].children, newPID, procTable[newPID].priority);
  //--Add to readylist
     if(DEBUG == 3) USLOSS_Console("P1_Fork(): Adding new process to ready list\n");
-    insert(readyList,newPID, priority);
+    insert(readyList,newPID, procTable[newPID].priority);
  //--call dispatcher
     if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Calling dispatcher()\n");
+    numberProcs++;
     dispatcher();
  //--Enable interrupts
  //--Return PID
@@ -229,23 +231,26 @@ void P1_Quit(int status) {
         procTable[node->pid].parentPID = -1;
     }
 //--Clean up proc table entry
-    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Process finished withs status: %d\n",status);
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Process finished with status: %d\n",status);
     procTable[P1_GetPID()].return_status = status;
     procTable[P1_GetPID()].status = FINISHED;
 
     int currentProcParentPID = procTable[P1_GetPID()].parentPID;
 //--Remove then append process to parent's child block, making it so that the first process to 
 //--quit will be the first process with a status of quit it finds. 
-
+    if(DEBUG >= 2) USLOSS_Console("Move node to back of parent's list\n");
+    print_list(procTable[currentProcParentPID].children);
     remove_node(procTable[currentProcParentPID].children, P1_GetPID());
-    append_list(procTable[currentProcParentPID].children, P1_GetPID());
+    append_list(procTable[currentProcParentPID].children, P1_GetPID(), procTable[currentProcParentPID].priority);
 
 //--Unblock parent (if blocked)
+        if(DEBUG >= 2) USLOSS_Console("Unblock Parent");
     if(procTable[currentProcParentPID].status == BLOCKED){
         procTable[currentProcParentPID].status = READY;
         insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
 //--Call dispatcher
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Calling dispatcher()\n");
+    numberProcs--;
     dispatcher();
 //--Enable interrupts
 }
@@ -275,7 +280,7 @@ int P1_Kill(int PID, int status) {
     }
 
 //--Check if PID is valid
-    if(procTable[PID].status == INVALID){
+    if(procTable[PID].status == NO_PROCESS){
         return -1;
     }
 
@@ -299,7 +304,7 @@ int P1_Kill(int PID, int status) {
 //--quit will be the first process with a status of quit it finds. 
 
     remove_node(procTable[currentProcParentPID].children, P1_GetPID());
-    append_list(procTable[currentProcParentPID].children, P1_GetPID());
+    append_list(procTable[currentProcParentPID].children, P1_GetPID(),procTable[currentProcParentPID].priority);
 
 //--Unblock parent (if blocked)
     if(currentProcParentPID >= 0){
@@ -308,6 +313,7 @@ int P1_Kill(int PID, int status) {
             insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
     }
 //--Call dispatcher
+    numberProcs--;
     if(DEBUG >= 2) USLOSS_Console("P1_Kill(): Calling dispatcher()\n");
     dispatcher();
 
@@ -347,14 +353,14 @@ int P1_Join(int *status) {
             if(procTable[node->pid].status == FINISHED){
                 //Not sure what to do, but this is when it finds its first quit child
                 //Something about quitting the child or parent or both, I'm not sure.
-                status = procTable[node->pid].return_status;
+                *status = procTable[node->pid].return_status;
+
                 return node->pid;
             }
             node = node->next;
         }
         //----If no quit child, block until child returns
         procTable[P1_GetPID()].status = BLOCKED;
-
     }
 
 //--Clean up child process
@@ -405,6 +411,7 @@ void P1_DumpProcesses() {
  * Side Effects:If in deadlock, halt
  * ----------------------------------------------------------------------- */
 int sentinel(void *notused) {
+    if(DEBUG == 3) USLOSS_Console("Number of Processes: %d\n",numberProcs);
     while(numberProcs > 1) {
     //--Check for deadlock (NOT IMPLEMENTED)
     //--Commented out since interrupts are not implemented
@@ -436,46 +443,39 @@ int isKernel() {
  * Returns:
  * Side Effects:
  * ----------------------------------------------------------------------- */
-
-
 void dispatcher() {
-
     if(DEBUG == 3) USLOSS_Console("dispatcher(): Entered Dispatcher\n");
-
     if(!isKernel()) {
       USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
       USLOSS_Halt(1);
     }
-
-    node *next = pop(readyList);
-
-    /* First process */
-    if(currentPID < 0){
-      currentPID = next->pid;
-      USLOSS_ContextSwitch(NULL, &procTable[currentPID].context);
-    }
-    /* Sentinel process */
-    else if(procTable[next->pid].priority == 6){
-        insert(readyList,next->pid, 6);
-    }
-    /*Current process is not yet finished, but dispatcher wants to run new process*/
-    else if(procTable[currentPID].status == READY){
-
-        /*Current process is lower priority than next process*/
-        if(procTable[currentPID].priority > next->priority){
-            insert(readyList,currentPID, procTable[currentPID].priority);//Add current process back to readyList
-            USLOSS_ContextSwitch(&procTable[currentPID].context, &procTable[next->pid].context); //switch context
-            currentPID = next->pid; //set pid to new running pid
+    Node *next = pop(readyList);
+    PCB cur = procTable[next->pid];
+    if(DEBUG == 3) USLOSS_Console("dispatcher(): Ready Process: %s\tPID:%d\tPriority%d\n",cur.name,cur.PID,cur.priority);
+    print_list(readyList);
+//--Check if the 1st or 2nd run    
+    if(P1_GetPID() < 0) {
+        if(DEBUG >= 2) USLOSS_Console("dispatcher(): Ready Process: %s %d %d\n",procTable[next->pid].name,next->pid,procTable[next->pid].priority);
+    //--If next process is sentinel, add back to list
+        if(procTable[next->pid].priority == MINPRIORITY) {
+            if(DEBUG == 3) USLOSS_Console("dispatcher(): First run, dont run Sentinel\n");
+            append_list(readyList,next->pid,MINPRIORITY);
+            if(DEBUG == 3) USLOSS_Console("dispatcher(): Sentinel added to end of readyList\n");
+    //--Otherwise its the 2nd run, so switch to that process
+        } else {
+            if(DEBUG == 3) USLOSS_Console("dispatcher(): Second run, run process %s %d\n", procTable[next->pid].name,next->pid);
+            currentPID = next->pid;
+            USLOSS_ContextSwitch(NULL,&procTable[currentPID].context);
         }
-        /*Current process is higher priority than next process*/
-        else{
-            insert(readyList, next->pid, next->priority);
-        }
+//--Must not be at the beginning
+    } else {
+        if(DEBUG >= 2) USLOSS_Console("dispatcher(): Not 1st/2nd run, switching contexts\n");
+        int oldPID = currentPID;
+        currentPID=next->pid;
+        if(procTable[oldPID].status != BLOCKED || procTable[oldPID].status != FINISHED)
+            insert(readyList,oldPID,procTable[oldPID].priority);
+        USLOSS_ContextSwitch(&procTable[oldPID].context, &procTable[next->pid].context);
+        USLOSS_Console("WTF\n");
     }
-    /*Current process is no longer READY*/
-    else{
-      USLOSS_ContextSwitch(&procTable[currentPID].context, &procTable[next->pid].context); //switch context
-      currentPID = next->pid; //set pid to new running pid
-    }
-
+    if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
 }
