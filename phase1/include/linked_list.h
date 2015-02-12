@@ -13,8 +13,8 @@ typedef struct list {
 } List;
 
 extern List *create_list();
-extern void append_list(List *list, unsigned int pid);
-extern void inster(List *list, unsigned int pid, int priority);
+extern void append_list(List *list, unsigned int pid, int priority);
+extern void insert(List *list, unsigned int pid, int priority);
 extern Node *get_element(List *list, int element);
 extern Node *peek(List *list);
 extern Node *pop(List* list);
@@ -22,4 +22,4 @@ extern Node *find_status(List *list, unsigned int status);
 extern Node *find_pid(List *list, unsigned int pid);
 extern int print_list(List *list);
 extern void delete_list(List *list);
-
+extern void remove_node(List *list, unsigned int pid);
