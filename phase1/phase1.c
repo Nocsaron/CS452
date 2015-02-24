@@ -30,6 +30,13 @@
 int sentinel(void * notused);
 int isKernel();
 void dispatcher();
+
+// Interrupt Handlers
+void alarm_handler(int dev, void *arg);
+void disk_handler(int dev, void *arg);
+void term_handler(int dev, void *arg);
+void sys_handler(int dev, void *arg);
+
 /* -------------------------- Globals ------------------------------------- */
 
 typedef struct {
@@ -48,6 +55,16 @@ typedef struct {
     List                *children;              /* List of Child Processes */
 } PCB;
 
+//--Device Semaphores
+    P1_Semaphore clock_sem;
+    P1_Semaphore alarm_sem;
+    P1_Semaphore disk_sem_0, disk_sem_1;
+    P1_Semaphore term_sem_0, term_sem_1, term_sem_2, term_sem_3;
+//--Device Statuses
+    int clock_status;
+    int alarm_status;
+    int disk_status_0,disk_status_1;
+    int term_status_0, term_status_1, term_status_2 ,term_status_3;
 
 //--Process Table
     PCB procTable[P1_MAXPROC];
@@ -478,4 +495,107 @@ void dispatcher() {
         USLOSS_Console("WTF\n");
     }
     if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
+}
+
+/* ------------------------------------------------------------------------
+ * Name: 
+ * Purpose:
+ * Parameter:
+ * Returns:
+ * Side Effects:
+ * ----------------------------------------------------------------------- */
+void P1_P(P1_Semaphore sem) {
+
+}
+/* ------------------------------------------------------------------------
+ * Name: 
+ * Purpose:
+ * Parameter:
+ * Returns:
+ * Side Effects:
+ * ----------------------------------------------------------------------- */
+void P1_V(P1_Semaphore sem) {
+
+}
+/* ------------------------------------------------------------------------
+ * Name: P1_WaitDevice 
+ * Purpose: Synchronizes Intterupt Handlers and waits on semaphor associated with device
+ * Parameter:   int type - device type
+ *              int unit - which unit of that type 
+ *              int *status - Where the device's status register is stored
+ * Returns:     -2 - Invalid Type
+ *              -1 - Invalid Unite
+ *               0 - Success
+ * Side Effects: Status is updated 
+ * ----------------------------------------------------------------------- */
+int P1_WaitDevice(int type, int unit, int *status) {
+//--Usual Checks
+    if(!isKernel()) {
+        USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
+        USLOSS_Halt(1);
+    }
+//--Disable Interrupts
+    switch(type) {
+        case USLOSS_CLOCK_DEV:
+            if(unit != 0)
+                return -1;
+            P1_P(clock_sem);
+            break;
+        case USLOSS_ALARM_DEV:
+            if(unit != 0)
+                return -1;
+            P1_P(alarm_sem);
+            status = &alarm_status;
+            break;
+        case USLOSS_DISK_DEV:
+            if(unit == 0) {
+                P1_P(disk_sem_0);
+                status = &disk_status_0;
+            }
+            else if(unit == 1){
+                P1_P(disk_sem_1);
+                status = &disk_status_1;
+            }
+            else
+                return -1;
+            break;
+        case USLOSS_TERM_DEV:
+            if(unit == 0) {
+                P1_P(term_sem_0);
+                status = &term_status_0; 
+            }
+            else if(unit == 1) {
+                P1_P(term_sem_1);
+                status = &term_status_1;
+            }
+            else if(unit == 2) {
+                P1_P(term_sem_2);
+                status = &term_status_2;
+            }
+            else if(unit == 3) {
+                P1_P(term_sem_3);
+                status = &term_status_3;
+            }
+            else
+                return -1;
+            break;
+        default:
+            return -2;
+    }
+
+//--Enable interupts
+}
+
+//--Interrupt Handlers
+void alarm_handler(int dev, void *arg) {
+    int result; int status;
+}
+void disk_handler(int dev, void *arg) {
+    int result; int status;
+}
+void term_handler(int dev, void *arg) {
+    int result; int status;
+}
+void sys_handler(int dev, void *arg) {
+    int results; int status;
 }
