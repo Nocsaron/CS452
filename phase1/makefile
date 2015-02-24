@@ -1,2 +1,2 @@
-phase1: phase1.c
-	gcc phase1.c -Llibs -Iinclude -lusloss2.9 -llinked_list -o run
+phase1: phase1.c linked_list.c tests/test1.c
+	gcc -g phase1.c linked_list.c tests/test1.c -Llibs -Iinclude -lusloss2.9 -o run

@@ -30,35 +30,71 @@ void delete_list(List *list) {
 }
 
 void remove_node(List *list, unsigned int pid) {
-    Node *node = list->first;
-    Node *temp;
-    while(node->next != NULL) {
-        if(node->pid == pid) {
-            temp = node->next;
-            node->next=node->next->next;
+    if(list->first->pid == pid) {
+        Node *temp = list->first;
+        list->first=list->first->next;
+        free(temp);
+    } else {
+        Node *node = list->first;
+        Node *prev_node;
+ //       printf("in remove\n");
+        while(node->next != NULL) {
+   //         printf("in while loop\n");
+            if(node->pid == pid) {
+     //           printf("\tPID MATCHES\n");
+                prev_node->next = node->next;
+                free(node);
+                break;
+            }
         }
-        node=node->next;
     }
-    free(temp);
 }
-
 void delete_node(Node *node) {
     free(node);
 }
 
-void append_list(List *list, unsigned int pid,unsigned int status) {
+void append_list(List *list, unsigned int pid, int priority) {
     Node *node = list->first;
     while(node->next != NULL) { node=node->next; }
     node->pid=pid;
-    node->status=status;
-    node->returncode=(int)NULL;
+    node->priority=priority;
     node->next=create_node();
+}
+
+void insert(List *list, unsigned int pid, int priority) {
+    Node *temp; Node *node;
+    temp=create_node();
+    temp->pid=pid;
+    temp->priority = priority;
+    if(list->first == NULL || priority < list->first->priority) {
+        temp->next=list->first;
+        list->first = temp;
+    } else {
+        node=list->first;
+        Node *prev_node;
+        while(node->next != NULL) {
+            if(node->priority >= priority) {
+               prev_node->next=temp;
+               temp->next=node;
+               return;
+            }
+            prev_node=node;
+            node=node->next;
+        }
+               prev_node->next=temp;
+               temp->next=node;
+    }
 }
 
 Node *pop(List *list) {
     Node *temp = list->first;
-    Node *new_first=temp->next;
-    list->first=new_first;
+    if(temp->next == NULL) {
+        Node *new_first = create_node();
+        list->first=new_first;
+    } else {
+        Node *new_first=temp->next;
+        list->first=new_first;
+    }
     return temp;
 }
 
@@ -69,15 +105,6 @@ Node *get_element(List *list, int element) {
     int i = 0;
     while(i < element && node != NULL) { node=node->next; i++; }
     return node;
-}
-
-Node *find_status(List *list, unsigned int status) {
-    Node *node = list->first;
-    while(node->next != NULL) {
-        if(node->status == status) { return node; }
-        node=node->next;
-    }
-    return NULL;
 }
 
 Node *find_pid(List *list, unsigned int pid) {
@@ -93,36 +120,28 @@ int print_list(List *list) {
     Node *node = list->first;
     int i=0;
     while(node->next != NULL) {
-        printf("Pid: %d\tStatus: %d\n",node->pid, node->status);
+        printf("Pid: %d\t Priority: %d\n",node->pid,node->priority);
         node = node->next;
         i++;
     }
     printf("\n");
-    return i-1;
-}
-void print_node(Node *node) { 
-    if(node->returncode=(int)NULL)
-        printf("Pid: %d\tStatus: %d\tReturn Code: NULL\n",node->pid,node->status); 
-    else
-        printf("Pid: %d\tStatus: %d\tReturn Code: %d\n",node->pid,node->status,node->returncode); 
-
+    return i;
 }
 /*
 int main(int argc, char *argv[]) {
     List *list = create_list();
     int i;
-    for(i = 0; i < argc; i++) {
-        append_list(list,i,i*2);
-    }
-    int num = print_list(list);
-    printf("%i arguments printed\n\n\n",num);
-
-    remove_node(list,4);
-
+    append_list(list,1,6);
     print_list(list);
-
-
-
+    append_list(list,2,8);
+    insert(list,3,4);
+    insert(list,4,1);
+    insert(list,5,5);
+    insert(list,6,-2);
+    insert(list,7,10);
+    insert(list,8,-100);
+    remove_node(list,1);
+    print_list(list);
     delete_list(list);
 }
 */
