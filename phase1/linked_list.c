@@ -140,7 +140,7 @@ int main(int argc, char *argv[]) {
     insert(list,6,-2);
     insert(list,7,10);
     insert(list,8,-100);
-    remove_node(list,7);
+    remove_node(list,1);
     print_list(list);
     delete_list(list);
 }

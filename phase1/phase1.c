@@ -238,13 +238,13 @@ void P1_Quit(int status) {
     int currentProcParentPID = procTable[P1_GetPID()].parentPID;
 //--Remove then append process to parent's child block, making it so that the first process to 
 //--quit will be the first process with a status of quit it finds. 
-    if(DEBUG >= 2) USLOSS_Console("Move node to back of parent's list\n");
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Move node to back of parent's list\n");
     print_list(procTable[currentProcParentPID].children);
     remove_node(procTable[currentProcParentPID].children, P1_GetPID());
     append_list(procTable[currentProcParentPID].children, P1_GetPID(), procTable[currentProcParentPID].priority);
 
 //--Unblock parent (if blocked)
-        if(DEBUG >= 2) USLOSS_Console("Unblock Parent");
+    if(DEBUG >= 2) USLOSS_Console("Unblock Parent");
     if(procTable[currentProcParentPID].status == BLOCKED){
         procTable[currentProcParentPID].status = READY;
         insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
