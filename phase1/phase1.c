@@ -48,6 +48,9 @@ typedef struct {
     List                *children;              /* List of Child Processes */
 } PCB;
 
+typedef struct Semaphore {
+    int value;
+} Semaphore;
 
 //--Process Table
     PCB procTable[P1_MAXPROC];
@@ -64,7 +67,7 @@ typedef struct {
 /* ------------------------------------------------------------------------
  * Name:        startup
  * Purpose:     Required by USLOSS
- *              Initializes semaphores, process table, interupts
+ *              Initializes saphores, process table, interupts
  *              Starts the sentinel process and calls P2_Startup
  * Parameter:   none
  * Returns:     nothing
@@ -478,4 +481,43 @@ void dispatcher() {
         USLOSS_Console("WTF\n");
     }
     if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
+}
+
+Semaphore P1_SemCreate(unsigned int PValue) {
+    Semaphore *s = malloc(sizeof(Semaphore));
+    s->value=Pvalue;
+    return (Semaphore)s;
+}
+
+void P1_P(Semaphore s) {
+    unsigned int curr_state;
+    while(1){
+        curr_state = USLOSS_PsrGet();
+        USLOSS_PsrSet(state & (~USLOSS_PSR_CURRENT_INT)); //Enters critical section
+        if (s->value > 0){
+            s->value--;
+            goto done;
+        }
+        // leaves critical section, returns state
+        USLOSS_PsrSet(curr_state);
+    }
+done:
+    // Enable interrupts
+    USLOSS_PsrSet(curr_state);
+}
+
+void P1_V(Semaphore s) {
+//Enters critical section
+    unsigned int curr_state = USLOSS_PsrGet();
+    USLOSS_PsrSet(curr_state & (~USLOSS_PSR_CURRENT_INT));
+
+    s->value++;
+
+        // leaves critical section, returns state
+    USLOSS_PsrSet(curr_state);
+}
+
+
+void P1_SemFree(Semaphore s){
+    free((Semaphore *)s);
 }
