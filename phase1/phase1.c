@@ -7,9 +7,9 @@
 
 #include <stddef.h>
 #include <stdlib.h>
-#include "usloss.h"
-#include "phase1.h"
-#include "linked_list.h"
+#include "include/usloss.h"
+#include "include/phase1.h"
+#include "include/linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
 #define DEBUG       3   /* 0: No debug statements
@@ -55,7 +55,7 @@ typedef struct {
     List                *children;              /* List of Child Processes */
 } PCB;
 
-typedef struct Semaphore {
+typedef struct {
     int value;
 } Semaphore;
 
@@ -501,15 +501,15 @@ void dispatcher() {
     if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
 }
 
-Semaphore P1_SemCreate(unsigned int PValue) {
+P1_Semaphore P1_SemCreate(unsigned int PValue) {
     Semaphore *s = malloc(sizeof(Semaphore));
-    s->value=Pvalue;
-    return (Semaphore)s;
+    s->value=PValue;
+    return (P1_Semaphore)s;
 }
 
 
-void P1_SemFree(Semaphore s){
-    free((Semaphore *)s);
+void P1_SemFree(P1_Semaphore s){
+    free((P1_Semaphore *)s);
 }
 
 /* ------------------------------------------------------------------------
@@ -519,13 +519,14 @@ void P1_SemFree(Semaphore s){
  * Returns:
  * Side Effects:
  * ----------------------------------------------------------------------- */
-void P1_P(Semaphore s) {
+void P1_P(P1_Semaphore s) {
     unsigned int curr_state;
+    Semaphore *s1 = s;
     while(1){
         curr_state = USLOSS_PsrGet();
-        USLOSS_PsrSet(state & (~USLOSS_PSR_CURRENT_INT)); //Enters critical section
-        if (s->value > 0){
-            s->value--;
+        USLOSS_PsrSet(curr_state & (~USLOSS_PSR_CURRENT_INT)); //Enters critical section
+        if (s1->value > 0){
+            s1->value--;
             goto done;
         }
         // leaves critical section, returns state
@@ -542,12 +543,13 @@ done:
  * Returns:
  * Side Effects:
  * ----------------------------------------------------------------------- */
-void P1_V(Semaphore s) {
+void P1_V(P1_Semaphore s) {
 //Enters critical section
+    Semaphore *s1 = s;
     unsigned int curr_state = USLOSS_PsrGet();
     USLOSS_PsrSet(curr_state & (~USLOSS_PSR_CURRENT_INT));
 
-    s->value++;
+    s1->value++;
 
         // leaves critical section, returns state
     USLOSS_PsrSet(curr_state);
