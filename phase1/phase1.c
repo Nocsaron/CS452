@@ -12,7 +12,7 @@
 #include "include/linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
-#define DEBUG       3   /* 0: No debug statements
+#define DEBUG       0   /* 0: No debug statements
                            1: Some debug statements
                            2: Most debug statements
                            3: All debug statements */
@@ -99,7 +99,6 @@ void startup() {
     for(i = 0; i < P1_MAXPROC; i++) {
         procTable[i].status=NO_PROCESS;
     }
-    USLOSS_Console("procTable[0].status = %d\n",procTable[i].status);
 //--Initialize Ready and Blocked lists
     if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
     readyList   = create_list();
@@ -237,6 +236,8 @@ int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority)
  *              Current Process changes
  * ----------------------------------------------------------------------- */
 void P1_Quit(int status) {
+    USLOSS_Console("\t\t%d\n",status);
+    USLOSS_Console("\t\t%d\n",P1_GetPID());
     if(DEBUG == 3) USLOSS_Console("P1_Quit(): Entered P1_Quit\n");
 //--Check in kernel mode
     if(!isKernel()) {
@@ -260,15 +261,23 @@ void P1_Quit(int status) {
 //--Remove then append process to parent's child block, making it so that the first process to 
 //--quit will be the first process with a status of quit it finds. 
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Move node to back of parent's list\n");
-    print_list(procTable[currentProcParentPID].children);
+    if(DEBUG == 3) { 
+        USLOSS_Console("-----P1_Quit(): Printing child list-----\n");
+        print_list(procTable[currentProcParentPID].children);
+    }
     remove_node(procTable[currentProcParentPID].children, P1_GetPID());
     append_list(procTable[currentProcParentPID].children, P1_GetPID(), procTable[currentProcParentPID].priority);
 
 //--Unblock parent (if blocked)
-    if(DEBUG >= 2) USLOSS_Console("Unblock Parent");
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Unblock Parent\n");
     if(procTable[currentProcParentPID].status == BLOCKED){
         procTable[currentProcParentPID].status = READY;
         insert(readyList,currentProcParentPID, procTable[currentProcParentPID].priority);}
+//--Remove Node from ReadyList
+    if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Removing from readylist\n");
+    if(DEBUG == 3) { USLOSS_Console("P1_Quit(): Ready list prior to remove\n"); print_list(readyList); }
+    remove_node(readyList,P1_GetPID());
+    if(DEBUG == 3){ USLOSS_Console("P1_Quit(): Read List after remove \n"); print_list(readyList);}
 //--Call dispatcher
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Calling dispatcher()\n");
     numberProcs--;
@@ -385,6 +394,7 @@ int P1_Join(int *status) {
     }
 
 //--Clean up child process
+    
 //--Enable interrupts
 //--Return child PID
     return -1;
@@ -470,10 +480,20 @@ void dispatcher() {
       USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
       USLOSS_Halt(1);
     }
+    if(DEBUG == 3) USLOSS_Console("dName: %s PID: %d Status: %d\n",
+            procTable[readyList->first->pid].name,
+            procTable[readyList->first->pid].PID,
+            procTable[readyList->first->pid].status
+    );
+    if(procTable[readyList->first->pid].status != 1)
+        pop(readyList);
     Node *next = pop(readyList);
     PCB cur = procTable[next->pid];
-    if(DEBUG == 3) USLOSS_Console("dispatcher(): Ready Process: %s\tPID:%d\tPriority%d\n",cur.name,cur.PID,cur.priority);
-    print_list(readyList);
+    if(DEBUG == 3) USLOSS_Console("dispatcher(): Ready Process: %s\tPID:%d\tPriority:%d\tStatus:%d\n",cur.name,cur.PID,cur.priority,cur.status);
+    if(DEBUG == 3) {
+        USLOSS_Console("-----dispatcher: Printing readylist-----\n");
+        print_list(readyList);
+    }
 //--Check if the 1st or 2nd run    
     if(P1_GetPID() < 0) {
         if(DEBUG >= 2) USLOSS_Console("dispatcher(): Ready Process: %s %d %d\n",procTable[next->pid].name,next->pid,procTable[next->pid].priority);
@@ -495,8 +515,11 @@ void dispatcher() {
         currentPID=next->pid;
         if(procTable[oldPID].status != BLOCKED || procTable[oldPID].status != FINISHED)
             insert(readyList,oldPID,procTable[oldPID].priority);
+        if(DEBUG == 3) {
+            USLOSS_Console("dispatcherr(): \n \tOld Pid: %d\n", oldPID);
+            USLOSS_Console("\tNew Pid: %d\n", next->pid);
+        }
         USLOSS_ContextSwitch(&procTable[oldPID].context, &procTable[next->pid].context);
-        USLOSS_Console("WTF\n");
     }
     if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
 }
