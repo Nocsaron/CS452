@@ -12,7 +12,7 @@
 #include "linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
-#define DEBUG       0   /* 0: No debug statements
+#define DEBUG       3   /* 0: No debug statements
                            1: Some debug statements
                            2: Most debug statements
                            3: All debug statements */
@@ -32,8 +32,7 @@ int isKernel();
 void dispatcher();
 
 // Interrupt Handlers
-void clock_handler();
-
+void clock_handler(int dev, void *arg);
 void alarm_handler(int dev, void *arg);
 void disk_handler(int dev, void *arg);
 void term_handler(int dev, void *arg);
@@ -59,7 +58,7 @@ typedef struct {
     int                 cyclesUsed;             /* Clock cycles process has run */
     int                 parentPID;              /* PID of Parent Process */
     List                *children;              /* List of Child Processes */
-    Semaphore           QuitChildren;           /* Semaphore to wait if children have not yet quit */
+    Semaphore           **QuitChildren;           /* Semaphore to wait if children have not yet quit */
 } PCB;
 
 //--Device Semaphores
@@ -72,6 +71,10 @@ typedef struct {
     int alarm_status;
     int disk_status_0,disk_status_1;
     int term_status_0, term_status_1, term_status_2 ,term_status_3;
+
+//--Clock Stuff
+    int quantum_count = 0;
+    int clock_count = 0;
 
 //--Process Table
     PCB procTable[P1_MAXPROC];
@@ -102,9 +105,7 @@ void startup() {
     for(i = 0; i < P1_MAXPROC; i++) {
         procTable[i].status=NO_PROCESS;
     }
-
-    USLOSS_IntVec[USLOSS_CLOCK_INT] = clock_handler;
-
+    USLOSS_IntVec[USLOSS_CLOCK_INT] = clock_handler;
 //--Initialize Ready and Blocked lists
     if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
     readyList   = create_list();
@@ -211,6 +212,9 @@ int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority)
     procTable[newPID].cyclesUsed    = 0;
     procTable[newPID].parentPID     = P1_GetPID();
     procTable[newPID].children      = create_list();
+ //--Wierd Case for P2
+    if(newPID == 1)
+        procTable[newPID].parentPID=1;
  //--Allocate Stack
     if(DEBUG >= 2) USLOSS_Console("P1_Fork(): Allocating space for stack\n");
     procTable[newPID].stack = malloc(stacksize);
@@ -242,14 +246,16 @@ int P1_Fork(char *name, int(*f)(void *), void *arg, int stacksize, int priority)
  *              Current Process changes
  * ----------------------------------------------------------------------- */
 void P1_Quit(int status) {
-    USLOSS_Console("\t\t%d\n",status);
-    USLOSS_Console("\t\t%d\n",P1_GetPID());
-    if(DEBUG == 3) USLOSS_Console("P1_Quit(): Entered P1_Quit\n");
+//    USLOSS_Console("\t\t%d\n",status);
+//    USLOSS_Console("\t\t%d\n",P1_GetPID());
+    if(DEBUG == 3) USLOSS_Console("P1_Quit(): Process %d Entered P1_Quit\n",P1_GetPID());
 //--Check in kernel mode
     if(!isKernel()) {
         USLOSS_Console("ERROR: Not in kernel mode!\n");
         USLOSS_Halt(1);
     }
+    int currentProcParentPID = procTable[P1_GetPID()].parentPID;
+
 //--Disable interrupts
 //--Iterate through children
     if(DEBUG == 3) USLOSS_Console("P1_Quit(): Setting all children's parent pid to -1\n");
@@ -263,7 +269,6 @@ void P1_Quit(int status) {
     procTable[P1_GetPID()].return_status = status;
     procTable[P1_GetPID()].status = FINISHED;
 
-    int currentProcParentPID = procTable[P1_GetPID()].parentPID;
 //--Remove then append process to parent's child block, making it so that the first process to 
 //--quit will be the first process with a status of quit it finds. 
     if(DEBUG >= 2) USLOSS_Console("P1_Quit(): Move node to back of parent's list\n");
@@ -304,6 +309,7 @@ void P1_Quit(int status) {
 int P1_Kill(int PID, int status) {
 
     if(DEBUG == 3) USLOSS_Console("P1_Kill(): Entered P1_Kill\n");
+    if(DEBUG == 3) USLOSS_Console("P1_Kill(): PID: %d\n",PID);
 //--Check in kernel mode
     if(!isKernel()) {
         USLOSS_Console("ERROR: Not in kernel mode!\n");
@@ -312,14 +318,20 @@ int P1_Kill(int PID, int status) {
 
 //--Check if PID is Current Process
     if(PID == P1_GetPID()){
+        if(DEBUG == 3) USLOSS_Console("P1_Kill(): You can't kill yourself\n");
         return -2;
     }
 
 //--Check if PID is valid
     if(procTable[PID].status == NO_PROCESS){
+        if(DEBUG == 3) USLOSS_Console("P1_Kill(): No process with this PID!\n");
         return -1;
     }
-
+//--Can't Kill the Sentinel
+    if(PID == 0) {
+        if(DEBUG == 3) USLOSS_Console("P1_Kill(): Can't kill sentinel (PID=0)\n");
+        return -1;
+    }
 //--Disable interrupts
 //--Iterate through children
     if(DEBUG == 3) USLOSS_Console("P1_Kill(): Setting all children's parent pid to -1\n");
@@ -332,6 +344,7 @@ int P1_Kill(int PID, int status) {
     }
 //--Clean up proc table entry
     if(DEBUG >= 2) USLOSS_Console("P1_Kill(): Process finished withs status: %d\n",status);
+    //USLOSS_Console("\tPID: %d\n\tStatus: %d\n",PID,status);
     procTable[PID].return_status = status;
     procTable[PID].status = FINISHED;
 
@@ -350,8 +363,6 @@ int P1_Kill(int PID, int status) {
     }
 //--Call dispatcher
     numberProcs--;
-    if(DEBUG >= 2) USLOSS_Console("P1_Kill(): Calling dispatcher()\n");
-    dispatcher();
 
     return 0;
 }
@@ -377,26 +388,27 @@ int P1_Join(int *status) {
 //--Disable interrupts
 //--Validate input
 //----Make sure process has kids
-    Node *node = procTable[P1_GetPID()].children->first;
 
+    Node *node = procTable[P1_GetPID()].children->first;
     if(node->next == NULL){
         procTable[P1_GetPID()].status = BLOCKED;
-        USLOSS_Console("P1_Join(): Process %d has no children\n", node->pid);
+        if(DEBUG == 3) USLOSS_Console("P1_Join(): Process %d has no children\n", node->pid);
         return -1;
     }
     else{
         //--Get !first! quit child
 
-        P1_P((P1_Semaphore) *procTable[P1_GetPID()].QuitChildren);
+//        P1_P((P1_Semaphore) procTable[P1_GetPID()].QuitChildren);
 
-        USLOSS_Console("P1_Join(): Getting first quit child for process %d\n", node->pid);
+        if(DEBUG == 3) USLOSS_Console("P1_Join(): Getting first quit child for process %d\n", node->pid);
         while(node->next != NULL){
             if(procTable[node->pid].status == FINISHED){
                 //Not sure what to do, but this is when it finds its first quit child
                 //Something about quitting the child or parent or both, I'm not sure.
                 *status = procTable[node->pid].return_status;
-
-                return node->pid;
+                int pid = node->pid;
+                remove_node(procTable[P1_GetPID()].children,pid);
+                return pid;
             }
             node = node->next;
         }
@@ -408,7 +420,10 @@ int P1_Join(int *status) {
     
 //--Enable interrupts
 //--Return child PID
-    return -1;
+//Must be first node
+    node = procTable[P1_GetPID()].children->first;
+    *status = procTable[node->pid].return_status;
+    return node->pid;
 }
 /* ------------------------------------------------------------------------
  * Name:        P1_getPID 
@@ -487,6 +502,10 @@ int isKernel() {
  * ----------------------------------------------------------------------- */
 void dispatcher() {
     if(DEBUG == 3) USLOSS_Console("dispatcher(): Entered Dispatcher\n");
+    if(DEBUG == 3) {
+        USLOSS_Console("-----Dispatcher: Printing ReadList-----\n");
+        print_list(readyList);
+    }
     if(!isKernel()) {
       USLOSS_Console("ERROR: Not in kernel mode. Exiting...\n");
       USLOSS_Halt(1);
@@ -525,9 +544,13 @@ void dispatcher() {
         int oldPID = currentPID;
         currentPID=next->pid;
 
-        if(procTable[oldPID].status != BLOCKED || procTable[oldPID].status != FINISHED)
+        if(procTable[oldPID].status != BLOCKED && procTable[oldPID].status != FINISHED)
             insert(readyList,oldPID,procTable[oldPID].priority);
 
+        if(DEBUG == 3) {
+            USLOSS_Console("-----Dispatcher: Printing ReadList-----\n");
+            print_list(readyList);
+        }
         if(DEBUG == 3) {
             USLOSS_Console("dispatcherr(): \n \tOld Pid: %d\n", oldPID);
             USLOSS_Console("\tNew Pid: %d\n", next->pid);
@@ -664,6 +687,29 @@ int P1_WaitDevice(int type, int unit, int *status) {
 }
 
 //--Interrupt Handlers
+void clock_handler(int dev, void *arg) {
+    if(DEBUG >= 2) USLOSS_Console("clock_handler(): In Clock_Handler()\n");
+    quantum_count++; clock_count++;
+    if(DEBUG == 3) USLOSS_Console("clock_handler():  Quantum: %d\n\t\t  Clock: %d\n",quantum_count,clock_count);
+    int status, result;
+    if(clock_count == 5) {
+        if(DEBUG == 3) USLOSS_Console("clock_handler(): resetting clock\n");
+        clock_count = 0;
+        result = USLOSS_DeviceInput(USLOSS_CLOCK_DEV,0,&status);
+        if(status == USLOSS_DEV_OK) {
+            if(DEBUG == 3) USLOSS_Console("clock_handler(): OK, V the clock semaphore\n");
+            P1_V(clock_sem);
+        }
+        else {
+            USLOSS_Console("ERROR: Clock failed! Exiting....'n");
+            USLOSS_Halt(1);
+        }
+    }
+    if(quantum_count == 4) { 
+        if(DEBUG == 3) USLOSS_Console("clock_handler(): Quantum is 4. Call dispatcher\n");
+        dispatcher();
+    }
+}
 void alarm_handler(int dev, void *arg) {
     int result; int status;
 }
