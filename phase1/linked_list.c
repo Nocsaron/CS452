@@ -60,28 +60,39 @@ void append_list(List *list, unsigned int pid, int priority) {
 }
 
 void insert(List *list, unsigned int pid, int priority) {
+
+    //Set up node to insert
     Node *temp; Node *node;
     temp=create_node();
     temp->pid=pid;
     temp->priority = priority;
+
+    Node *prev_node = malloc(sizeof(Node));
+
+    //Node is either first in the list, or has a higher priority than the first item on the list.
     if(list->first == NULL || priority < list->first->priority) {
         temp->next=list->first;
         list->first = temp;
     } else {
+    //Iterate through the nodes until you find one that has less priority, then put the Node in front of it. 
         node=list->first;
-        Node *prev_node;
         while(node->next != NULL) {
             if(node->priority >= priority) {
                prev_node->next=temp;
                temp->next=node;
-               return;
+               goto done;
             }
             prev_node=node;
             node=node->next;
         }
-               prev_node->next=temp;
-               temp->next=node;
+
+        prev_node->next=temp;
+        temp->next=node;
     }
+
+    done:
+        free(prev_node);
+        return;
 }
 
 Node *pop(List *list) {

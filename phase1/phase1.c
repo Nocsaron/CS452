@@ -7,9 +7,9 @@
 
 #include <stddef.h>
 #include <stdlib.h>
-#include "include/usloss.h"
-#include "include/phase1.h"
-#include "include/linked_list.h"
+#include "usloss.h"
+#include "phase1.h"
+#include "linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
 #define DEBUG       0   /* 0: No debug statements
@@ -32,12 +32,18 @@ int isKernel();
 void dispatcher();
 
 // Interrupt Handlers
+void clock_handler();
+
 void alarm_handler(int dev, void *arg);
 void disk_handler(int dev, void *arg);
 void term_handler(int dev, void *arg);
 void sys_handler(int dev, void *arg);
 
 /* -------------------------- Globals ------------------------------------- */
+
+typedef struct {
+    int value;
+} Semaphore;
 
 typedef struct {
     USLOSS_Context      context;                /* State of process */
@@ -53,11 +59,8 @@ typedef struct {
     int                 cyclesUsed;             /* Clock cycles process has run */
     int                 parentPID;              /* PID of Parent Process */
     List                *children;              /* List of Child Processes */
+    Semaphore           QuitChildren;           /* Semaphore to wait if children have not yet quit */
 } PCB;
-
-typedef struct {
-    int value;
-} Semaphore;
 
 //--Device Semaphores
     P1_Semaphore clock_sem;
@@ -99,6 +102,9 @@ void startup() {
     for(i = 0; i < P1_MAXPROC; i++) {
         procTable[i].status=NO_PROCESS;
     }
+
+    USLOSS_IntVec[USLOSS_CLOCK_INT] = clock_handler;
+
 //--Initialize Ready and Blocked lists
     if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
     readyList   = create_list();
@@ -375,10 +381,15 @@ int P1_Join(int *status) {
 
     if(node->next == NULL){
         procTable[P1_GetPID()].status = BLOCKED;
+        USLOSS_Console("P1_Join(): Process %d has no children\n", node->pid);
         return -1;
     }
     else{
         //--Get !first! quit child
+
+        P1_P((P1_Semaphore) *procTable[P1_GetPID()].QuitChildren);
+
+        USLOSS_Console("P1_Join(): Getting first quit child for process %d\n", node->pid);
         while(node->next != NULL){
             if(procTable[node->pid].status == FINISHED){
                 //Not sure what to do, but this is when it finds its first quit child
@@ -513,12 +524,18 @@ void dispatcher() {
         if(DEBUG >= 2) USLOSS_Console("dispatcher(): Not 1st/2nd run, switching contexts\n");
         int oldPID = currentPID;
         currentPID=next->pid;
+
         if(procTable[oldPID].status != BLOCKED || procTable[oldPID].status != FINISHED)
             insert(readyList,oldPID,procTable[oldPID].priority);
+
         if(DEBUG == 3) {
             USLOSS_Console("dispatcherr(): \n \tOld Pid: %d\n", oldPID);
             USLOSS_Console("\tNew Pid: %d\n", next->pid);
         }
+
+
+        procTable[currentPID].time_start = USLOSS_Clock();
+
         USLOSS_ContextSwitch(&procTable[oldPID].context, &procTable[next->pid].context);
     }
     if(DEBUG >= 2) USLOSS_Console("dispatcher(): Exiting Dispatcher\n");
