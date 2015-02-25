@@ -30,23 +30,21 @@ void delete_list(List *list) {
 }
 
 void remove_node(List *list, unsigned int pid) {
-    if(list->first->pid == pid) {
-        Node *temp = list->first;
-        list->first=list->first->next;
-        free(temp);
-    } else {
-        Node *node = list->first;
-        Node *prev_node;
- //       printf("in remove\n");
-        while(node->next != NULL) {
-   //         printf("in while loop\n");
-            if(node->pid == pid) {
-     //           printf("\tPID MATCHES\n");
-                prev_node->next = node->next;
-                free(node);
-                break;
-            }
+    Node *node = list->first;
+    if(node->pid == pid) {
+        list->first = node->next;
+        free(node);
+        return;
+    }
+    while(node != NULL) {
+        if(node->next == NULL) break;
+        if(node->next->pid == pid) {
+            Node *temp = node->next;
+            node->next=node->next->next;
+            free(temp);
+            return;
         }
+        node = node->next;
     }
 }
 void delete_node(Node *node) {
@@ -140,8 +138,14 @@ int main(int argc, char *argv[]) {
     insert(list,6,-2);
     insert(list,7,10);
     insert(list,8,-100);
-    remove_node(list,1);
     print_list(list);
-    delete_list(list);
-}
-*/
+    remove_node(list,8);
+    printf("------------------------------------\n");
+    print_list(list);
+    remove_node(list,4);
+    printf("------------------------------------\n");
+    print_list(list);
+    pop(list);
+    print_list(list);
+    }
+    */
