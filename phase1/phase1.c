@@ -12,7 +12,7 @@
 #include "linked_list.h"
 
 /* ----------------------------Constants----------------------------------- */
-#define DEBUG       3   /* 0: No debug statements
+#define DEBUG       0   /* 0: No debug statements
                            1: Some debug statements
                            2: Most debug statements
                            3: All debug statements */
@@ -105,7 +105,13 @@ void startup() {
     for(i = 0; i < P1_MAXPROC; i++) {
         procTable[i].status=NO_PROCESS;
     }
-    USLOSS_IntVec[USLOSS_CLOCK_INT] = clock_handler;
+
+//--Set up interupt handlers
+    USLOSS_IntVec[USLOSS_CLOCK_INT]   = clock_handler;
+    USLOSS_IntVec[USLOSS_ALARM_INT]   = alarm_handler;
+    USLOSS_IntVec[USLOSS_DISK_INT]    = disk_handler;
+    USLOSS_IntVec[USLOSS_TERM_INT]    = term_handler;
+    USLOSS_IntVec[USLOSS_SYSCALL_INT] = sys_handler; 
 //--Initialize Ready and Blocked lists
     if(DEBUG == 3) USLOSS_Console("startup(): Initializing Ready and Blocked Lists\n");
     readyList   = create_list();
@@ -696,7 +702,7 @@ void clock_handler(int dev, void *arg) {
         if(DEBUG == 3) USLOSS_Console("clock_handler(): resetting clock\n");
         clock_count = 0;
         result = USLOSS_DeviceInput(USLOSS_CLOCK_DEV,0,&status);
-        if(status == USLOSS_DEV_OK) {
+        if(result == USLOSS_DEV_OK) {
             if(DEBUG == 3) USLOSS_Console("clock_handler(): OK, V the clock semaphore\n");
             P1_V(clock_sem);
         }
@@ -712,13 +718,79 @@ void clock_handler(int dev, void *arg) {
 }
 void alarm_handler(int dev, void *arg) {
     int result; int status;
+    result = USLOSS_DeviceInput(USLOSS_ALARM_DEV,0,&status);
+    if(result == USLOSS_DEV_OK) {
+        alarm_status = status;
+        P1_V(alarm_sem);
+    }
+    else {
+        USLOSS_Console("ERROR: Alarm Device NOT OKAY\n");
+    }
 }
 void disk_handler(int dev, void *arg) {
     int result; int status;
+    int unit = (long int)arg;
+    result = USLOSS_DeviceInput(dev,unit,&status);
+    if(result == USLOSS_DEV_OK) {
+        if(unit == 0) {
+            disk_status_0 = status;
+            P1_V(disk_sem_0);
+        }
+        else if(unit == 1) {
+            disk_status_1 = status;
+            P1_V(disk_sem_1);
+        }
+        else {
+            USLOSS_Console("ERROR: Invalid Unit in Disk_Handler.\n");
+        }
+    }
+    else{
+        USLOSS_Console("ERROR: Disk Device NOT OKAY\n");
+    }
+    dispatcher();
 }
 void term_handler(int dev, void *arg) {
     int result; int status;
+    int unit = (long int)arg;
+    result = USLOSS_DeviceInput(dev,unit,&status);
+    if(result == USLOSS_DEV_OK) {
+        switch(unit) {
+            case 0:
+                term_status_0 = status;
+                P1_V(term_sem_0);
+                break;
+            case 1:
+                term_status_1 = status;
+                P1_V(term_sem_1);
+                break;
+            case 2:
+                term_status_2 = status;
+                P1_V(term_sem_2);
+                break;
+            case 3:
+                term_status_3 = status;
+                P1_V(term_sem_3);
+                break;
+            default:
+                USLOSS_Console("ERROR: Invalid Unit in Term_Handler\n");
+        }
+    }
 }
 void sys_handler(int dev, void *arg) {
-    int results; int status;
+    //WHAT ON EARTH IS THE SYSCALL VECTOR/ARRAY?
+    //NOT IN THE USERS MANUAL
+    int syscall_vec[10];
+    int index;
+    USLOSS_Sysargs *sysArgsPointer = (USLOSS_Sysargs *)arg;
+    int oldPsr = USLOSS_PsrGet();
+    index = sysArgsPointer->number;
+    if(syscall_vec[index] == NULL) {
+        USLOSS_Console("ERROR: SysCalls not implemented\n");
+    }
+    else {
+        USLOSS_PsrSet(oldPsr | USLOSS_PSR_CURRENT_INT);
+        //(Syscalls_vec[index])(sysArgsPointer);
+        USLOSS_PsrSet(oldPsr);
+    }
+
 }
