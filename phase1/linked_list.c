@@ -58,7 +58,7 @@ void append_list(List *list, unsigned int pid, int priority) {
     node->priority=priority;
     node->next=create_node();
 }
-
+/*
 void insert(List *list, unsigned int pid, int priority) {
 
     //Set up node to insert
@@ -94,7 +94,7 @@ void insert(List *list, unsigned int pid, int priority) {
         free(prev_node);
         return;
 }
-
+*/
 Node *pop(List *list) {
     Node *temp = list->first;
     if(temp->next == NULL) {
@@ -106,6 +106,32 @@ Node *pop(List *list) {
     }
     return temp;
 }
+
+void insert(List *list, unsigned int pid, int priority) {
+Node *temp; Node *node;
+temp=create_node();
+temp->pid=pid;
+temp->priority = priority;
+if(list->first == NULL || priority < list->first->priority) {
+temp->next=list->first;
+list->first = temp;
+} else {
+node=list->first;
+Node *prev_node;
+while(node->next != NULL) {
+if(node->priority >= priority) {
+prev_node->next=temp;
+temp->next=node;
+return;
+}
+prev_node=node;
+node=node->next;
+}
+prev_node->next=temp;
+temp->next=node;
+}
+}
+
 
 Node *peek(List *list) { return list->first; }
 
@@ -140,9 +166,8 @@ int print_list(List *list) {
 int main(int argc, char *argv[]) {
     List *list = create_list();
     int i;
-    append_list(list,1,6);
+    insert(list,100,100);
     print_list(list);
-    append_list(list,2,8);
     insert(list,3,4);
     insert(list,4,1);
     insert(list,5,5);
@@ -159,4 +184,4 @@ int main(int argc, char *argv[]) {
     pop(list);
     print_list(list);
     }
-    */
+   */ 
