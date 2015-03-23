@@ -14,7 +14,7 @@
 #	make clean	(removes all files created by this Makefile)
 
 # Change the following if your 452-students directory is in a non-standard location.
-452-STUDENTS = ~/452-students
+452-STUDENTS = /home/posideon/Dropbox/452-students
 
 # Set to version of USLOSS you want to use.
 USLOSS_VERSION = 2.9
@@ -23,7 +23,7 @@ USLOSS_VERSION = 2.9
 SRCS = linked_list.c phase1.c
 
 # Add any tests here. If the test is named foo then the source file is assumed to be foo.c.
-TESTS = test1
+TESTS = test1 test2 test3 test4 test5 test6 test7 test8 test9 test10 test11 test12 test13 test14 test15 test16 test17 test18
 
 # Change this if you want to change the arguments to valgrind.
 VGFLAGS = --track-origins=yes --leak-check=full --max-stackframe=100000

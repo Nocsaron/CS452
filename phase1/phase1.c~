@@ -658,7 +658,7 @@ void P1_V(P1_Semaphore s) {
     s2->value++;
 
     Node *node = pop(s2->q); 
-    insert(readyList, node->pid, node->priority);
+    insert(readyList, node, node.priority);
 
     USLOSS_PsrSet(curr_state); 
 }
