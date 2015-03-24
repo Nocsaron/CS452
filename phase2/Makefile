@@ -26,13 +26,13 @@ PHASE1_VERSION = 1.1
 SRCS = phase2.c
 
 # Add any tests here. If the test is named foo then the source file is assumed to be foo.c.
-TESTS = 
+TESTS = run 
 
 # Change this if you want to change the arguments to valgrind.
 VGFLAGS = --track-origins=yes --leak-check=full --max-stackframe=100000
 
 # Change this if you need to link against additional libraries (probably not).
-LIBS = -lphase2 -lphase$(PHASE1_VERSION) -lusloss$(USLOSS_VERSION)
+LIBS = -lphase2 -lphase$(PHASE1_VERSION) -lusloss$(USLOSS_VERSION) -luser
 
 # Change this if you want change which flags are passed to the C compiler.
 CFLAGS += -Wall -g 
