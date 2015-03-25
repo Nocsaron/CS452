@@ -12,13 +12,6 @@
  */
 
 
-/*Milestone Requirements  
- *  Item                        Status
- *  Clock Device Driver         Incomplete (total)
- *  Sys_Spawn                   Incomplete (total)
- *  Mailbox System Calls        Incomplete (total)
- *  User PCB Struct             Incomplete (total)
- */
 #define DEBUG   1
 #define SET_USERMODE USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_MODE)
 
@@ -47,6 +40,7 @@ void Spawn_Syscall(USLOSS_Sysargs *saPtr);
 void Terminate_Syscall(USLOSS_Sysargs *saPtr);
 
 int P2_Startup(void *arg) {
+    spawning = P1_SemCreate(1);
     set_up_sysvec();
     P2_Spawn("P3_Startup",P3_Startup,NULL,4*USLOSS_MIN_STACK,3);
     return 0;
@@ -93,12 +87,20 @@ void Terminate_Syscall(USLOSS_Sysargs *saPtr) {
 int P2_Spawn(char *name, int(*func)(void *), void *arg, int stackSize, int priority) {
     if(DEBUG == 1) USLOSS_Console("P2_Spawn(): Executing\n");
     checkMode();
+    P1_P(spawning);
+    if(DEBUG==1) USLOSS_Console("P2_Spawn(): Past spawning semaphore.");
     launch_name = name;
     launch_func = func;
     launch_arg = arg;
     parent_pid = P1_GetPID();
+    int pid =  P1_Fork(name,user_launch,arg,stackSize,priority);
+    P1_V(spawning);
+    return pid;
+}
+int P2_Sleep(int seconds) {
+    if(seconds < 0) { return 1; }
 
-    return P1_Fork(name,user_launch,arg,stackSize,priority);
+    return 0;
 }
 int user_launch(void *arg) {
     SET_USERMODE;
