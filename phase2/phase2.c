@@ -11,7 +11,8 @@
  * Phase2
  */
 
-
+//TODO: Clock Driver
+//TODO: P2_Sleep
 #define DEBUG   1
 #define SET_USERMODE USLOSS_PsrSet(USLOSS_PsrGet() & ~USLOSS_PSR_CURRENT_MODE)
 
@@ -32,6 +33,9 @@ int parent_pid;
 /* ----------------------Function Defnitions------------------------------- */
 int P2_Spawn(char *name, int(*func)(void *), void *arg, int stackSize, int priority);
 int P2_Wait(int *status);
+static int ClockDriver(void *arg);
+
+
 void set_up_sysvec();
 void checkMode();
 int user_launch(void *arg);
@@ -41,6 +45,7 @@ void Terminate_Syscall(USLOSS_Sysargs *saPtr);
 
 int P2_Startup(void *arg) {
     spawning = P1_SemCreate(1);
+    USLOSS_Halt(0);
     set_up_sysvec();
     P2_Spawn("P3_Startup",P3_Startup,NULL,4*USLOSS_MIN_STACK,3);
     return 0;
@@ -111,4 +116,31 @@ int user_launch(void *arg) {
     int return_val = launch_func(arg);
     Sys_Terminate(return_val);
     return 0;
+}
+static int ClockDriver(void *arg) {
+    P1_Semaphore running = (P1_Semaphore) arg;
+    int result;
+    int status;
+    int time_elapsed = 0;
+//    int time_desired = running;
+    int rc = 0;
+    /*
+     * Let the parent know we are running and enable interrupts.
+     */
+    P1_V(running);
+    USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
+    while(1) {
+        result = P1_WaitDevice(USLOSS_CLOCK_DEV, 0, &status);
+        if (result != 0) {
+            rc = 1;
+            goto done;
+        }
+        time_elapsed += 100;
+        /*
+         * Compute the current time and wake up any processes
+         * whose time has come.
+         */
+    }
+done:
+    return rc;
 }
