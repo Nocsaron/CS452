@@ -27,6 +27,10 @@ typedef struct {
     int mailbox_id;
 } sleep_message;
 
+typedef struct Slot *slot_ptr;
+typedef struct MailBox  *mbox_ptr;
+typedef struct Process  *proc_ptr;
+
 #define TRUE 1
 #define FALSE 0
 
@@ -58,9 +62,6 @@ char *launch_name;
 int(*launch_func)(void *);
 void *launch_arg;
 int parent_pid;
-typedef struct Slot *slot_ptr;
-typedef struct MailBox  *mbox_ptr;
-typedef struct Process  *proc_ptr;
 //The mail box table
 MailBox mboxTable[P2_MAX_MBOX];
 /* ----------------------Function Defnitions------------------------------- */
@@ -178,6 +179,7 @@ done:
     return rc;
 }
 /* -------------------------- Mailbox Functions ----------------------------------- */
+/*
 void Sys_MboxCreate(USLOSS_Sysargs *args){
         int num_slots = (int) args->arg1;
         int size = (int) args->arg2;
@@ -188,7 +190,7 @@ void Sys_MboxCreate(USLOSS_Sysargs *args){
 
         return;
 }
-
+*/
 int P2_MboxCreate(int num_slots, int size){
 
         int mboxID = -1;
@@ -223,7 +225,7 @@ int P2_MboxCreate(int num_slots, int size){
 
         return mboxID;
 }
-
+/*
 void Sys_MboxRelease(USLOSS_Sysargs *args){
 
     int mboxID = (int) args->arg1;
@@ -232,7 +234,7 @@ void Sys_MboxRelease(USLOSS_Sysargs *args){
 
     return;
 }
-
+*/
 int P2_MboxRelease(int mboxID){
     if (mboxID < 0 || mboxID >= P2_MAX_MBOX){
         return -1;
@@ -264,7 +266,7 @@ int P2_MboxRelease(int mboxID){
     return 0;
 
 }
-
+/*
 void Sys_MboxSend(USLOSS_Sysargs *args){
     int mboxID = (int) args->arg1;
     char *msg = (int) args->arg2;
@@ -286,7 +288,7 @@ void Sys_MboxCondSend(USLOSS_Sysargs *args){
 
     return;
 }
-
+*/
 int P2_MboxSend(int mboxID, char *msg, int size, int cond){
 
     mbox_ptr mbox = &mboxTable[mboxID];
@@ -334,7 +336,7 @@ int P2_MboxSend(int mboxID, char *msg, int size, int cond){
     return 0;
 
 }
-
+/*
 void Sys_MboxReceive(USLOSS_Sysargs *args){
     int mboxID = (int) args->arg1;
     char *rcv_buffer = (int) args->arg2;
@@ -371,8 +373,8 @@ void Sys_MboxCondReceive(USLOSS_Sysargs *args){
 
     return;
 }
-
-P2_MboxReceive(int mboxID, char *rcv_msg, int rcv_size, int cond){
+*/
+int P2_MboxReceive(int mboxID, char *rcv_msg, int rcv_size, int cond){
 
     mbox_ptr mbox = &mboxTable[mboxID];
 
