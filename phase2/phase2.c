@@ -22,7 +22,10 @@ typedef struct {
     int return_status;
     //Need list of children
 } User_PCB;
-
+typedef struct {
+    int sleep_time;
+    int mailbox_id;
+} sleep_message;
 
 /* -----------------------Global Variables--------------------------------- */
 P1_Semaphore spawning;
